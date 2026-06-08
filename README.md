@@ -219,7 +219,7 @@ See [SUGGESTION.md](./SUGGESTION.md) for the complete feature backlog including:
 - Tier 1 Critical fixes
 - Tier 2 High priority improvements
 - Tier 3 Moderately important additions
-- Tier 4 Nice-to-have enhancements
+- Tier 4 Nice-to-have enhancements.
 
 ---
 
