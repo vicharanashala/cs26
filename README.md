@@ -37,7 +37,7 @@ Every query the team answers once becomes a permanent asset. Subsequent interns 
 Initialize the entire project with a single command from the root directory:
 
 ```powershell
-# 1. Install all dependencies for both client and server
+# 1. Install all dependencies for both client and server.
 npm run install:all
 
 # 2. Seed baseline sections, FAQ entries, and superadmin/mentor/intern accounts
