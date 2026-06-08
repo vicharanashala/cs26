@@ -10,7 +10,10 @@ function signToken(id) {
 // POST /api/auth/register — self-registration only for intern/mentor
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, confirmPassword, role } = req.body;
+    if (password !== confirmPassword) {
+      return res.status(400).json({ message: 'Passwords do not match' });
+    }
     if (await User.findOne({ email })) {
       return res.status(409).json({ message: 'Email already registered' });
     }

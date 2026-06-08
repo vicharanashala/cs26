@@ -15,13 +15,18 @@ const T = {
 
 export default function LoginForm({ onAuth }) {
   const [mode,  setMode]  = useState('login');  // 'login' | 'register'
-  const [form,  setForm]  = useState({ name: '', email: '', password: '', role: 'intern' });
+  const [form,  setForm]  = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'intern' });
   const [error, setError] = useState('');
   const [busy,  setBusy]  = useState(false);
 
   async function submit(e) {
     e.preventDefault();
     setBusy(true); setError('');
+    if (mode === 'register' && form.password !== form.confirmPassword) {
+      setError('Passwords do not match');
+      setBusy(false);
+      return;
+    }
     try {
       const data = mode === 'login'
         ? await login(form.email, form.password)
@@ -96,6 +101,16 @@ export default function LoginForm({ onAuth }) {
           onChange={e => setForm({ ...form, password: e.target.value })}
           required
         />
+        {mode === 'register' && (
+          <input
+            style={inputStyle}
+            type="password"
+            placeholder="CONFIRM PASSWORD"
+            value={form.confirmPassword}
+            onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
+            required
+          />
+        )}
         {error && (
           <div style={{ fontSize: 11, color: T.red, marginBottom: 12, letterSpacing: '0.06em' }}>{error}</div>
         )}
