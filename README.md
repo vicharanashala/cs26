@@ -9,7 +9,7 @@ Every query the team answers once becomes a permanent asset. Subsequent interns 
 
 ### React Router Navigation
 - URL-based routing with proper browser back/forward support
-- Routes: `/` (OAQ), `/threads`, `/tracker`, `/sp`, `/admin`
+- Routes: `/` (OAQ Library), `/threads`, `/resolver`, `/sp`, `/admin`
 - Last visited route persisted in localStorage
 - Shareable direct links to any page
 
@@ -17,6 +17,16 @@ Every query the team answers once becomes a permanent asset. Subsequent interns 
 - Fully implemented CSS variable-based theming
 - Toggle with `☀️`/`🌙` button in Topbar
 - WCAG AA compliant contrast ratios
+
+### UI Renames (Latest)
+- "Baseline OAQ" renamed to **"OAQ Library"** across the platform
+- "Tracker" view/tab renamed to **"Resolver"**
+- Dedicated **Admin Issue Detail** page (`/admin/issues/:id`) for full history, replies, and moderation
+
+### Auth & Stability Improvements
+- **Auth Error Handling** — Clear distinction between expired session and invalid credentials
+- **Reply Timestamps** — Every community reply now displays when it was posted
+- **Content Fixes** — Trending section and query replies loading reliably
 
 ---
 
@@ -105,32 +115,34 @@ oaq-system/
         │   ├── Topbar.jsx        # Navigation + Dark Mode Toggle + role-based gates
         │   ├── LoginForm.jsx     # Contrasted and responsive credentials form
         │   ├── SPDashboard.jsx   # Ledger statements, top 50, and wallet charts
-        │   ├── BaselineOAQ.jsx   # 13 locked static baseline FAQs accordions
+        │   ├── BaselineOAQ.jsx   # 13 locked static OAQ Library accordions
         │   ├── TrendingFeed.jsx  # Top-15 query RSS feed with 5min auto-refresh
         │   ├── SectionFilter.jsx # Multi-select category predicate filters
         │   ├── AccordionDrawer.jsx# Inline drawers, upvotes, and recommendation rails
         │   ├── RecommendationRail.jsx# Collaborative search results (People Also Asked)
-        │   ├── OpenQueryCard.jsx # FCFS query card with voting and answer submission
-        │   ├── RaiseQueryModal.jsx# Modal for raising new queries
+        │   ├── OpenQueryCard.jsx # FCFS query card with voting, answer submission, Yaksha preview
+        │   ├── RaiseQueryModal.jsx# Modal for raising new queries (with duplicate detection)
         │   ├── ResolveModal.jsx  # Resolution submission modal
         │   ├── SharedModals.jsx  # Reusable ConfirmModal, InputModal, SPAdjustModal, ThreadCloseModal
         │   ├── RAGChatWidget.jsx# Floating AI chat with streaming text and knowledge base RAG
-        │   └── YakshaViewport.jsx# Content quality audit display
+        │   ├── YakshaViewport.jsx# Content quality audit display
+        │   └── UserProfileModal.jsx# Profile view modal for any user
         └── pages/
             ├── HomePage.jsx      # OAQ main portal with search and trending
-            ├── TrackerPage.jsx   # Active FCFS board table
+            ├── TrackerPage.jsx   # Active FCFS resolver board table
             ├── ThreadsPage.jsx   # Threaded discussions
-            └── AdminPage.jsx     # Moderation queues, stats, and SP adjustment
+            ├── AdminPage.jsx     # Moderation queues, stats, and SP adjustment
+            └── AdminIssueDetail.jsx# Dedicated issue view with moderation actions
 ```
 
 ---
 
 ## Features Implemented
 
-### Core Features (13 Total)
-1. **13 Locked Onboarding FAQ Baseline Accordions** — Read-only onboarding FAQ center
-2. **FCFS Query Resolution Tracker** — Gamified dynamic tracking board
-3. **Automated Content Quality Auditor (Yaksha-mini)** — Auto-checks answer quality
+### Core Features (15 Total)
+1. **13 Locked Onboarding FAQ OAQ Library** — Read-only onboarding FAQ center with accordion display
+2. **FCFS Query Resolver Board** — Gamified dynamic tracking board (formerly "Tracker")
+3. **Automated Content Quality Auditor (Yaksha-mini)** — Auto-checks answer quality with real-time preview
 4. **Community Auto-Promotion System** — Peer-driven answer validation via upvotes
 5. **Auto-Escalation Threshold Hook** — 5 upvotes in 2hrs → High priority
 6. **Collaborative Recommendation Rail** — "People Also Asked" recommendations
@@ -139,8 +151,14 @@ oaq-system/
 9. **Gamified SP & Wallet Subsystem** — Points, ledger, leaderboard, badges
 10. **Collaborative Nested Thread Discussions** — Forum-style threaded replies
 11. **Dynamic Section Filters** — Multi-select category filtering
-12. **Admin Moderation & Management Panel** — Dashboard for admins
+12. **Admin Moderation & Management Panel** — Dashboard with detailed issue view
 13. **Real-Time Sync Broadcaster** — Socket.io instant synchronization
+
+### Recent Improvements
+- **Timestamp in Replies** — Every community reply now shows when it was posted
+- **Auth Error Handling** — Clear distinction between expired session and invalid credentials on login
+- **Yaksha Preview** — Real-time content quality feedback before submitting answers
+- **Admin Issue Detail Page** — Dedicated page for each issue with full history, votes, and moderation actions
 
 ### Navigation & UI
 - **React Router** — URL-based navigation with browser history support
@@ -184,13 +202,22 @@ oaq-system/
 
 ### 5. Admin & Moderation Operations (`/api/admin`)
 - `GET /api/admin/stats` - Fetch overall metrics (total issues, top holders, activity log).
-
-### 6. RAG AI Chat (`/api/rag`)
-- `POST /api/rag/chat` - Streaming RAG chat endpoint. Sends message history, retrieves relevant Q&A context from the knowledge base using MongoDB text search, and streams GPT-3.5-turbo responses. Falls back to knowledge-base-only answers if `OPENAI_API_KEY` is not set in `.env`.
 - `GET /api/admin/issues` - Paginated admin queries list with Pin/Feature/Delete triggers.
+- `GET /api/admin/issues/:id` - Single issue detail with full history, replies, voting, and moderation.
+- `POST /api/admin/issues` - Create a new issue (Admin/Superadmin).
+- `DELETE /api/admin/issues/:id` - Remove an issue (Admin/Superadmin).
+- `PATCH /api/admin/issues/:id/pin` - Toggle pin status.
+- `PATCH /api/admin/issues/:id/feature` - Toggle featured status.
 - `GET /api/admin/users` - List all system accounts.
 - `POST /api/admin/users` - Direct creation of system accounts (Superadmin only).
 - `PATCH /api/admin/users/:id` - Adjust SP bank ledger balances or roles (Superadmin only).
+- `GET /api/admin/users/:id/sp-history` - View SP transaction history for a user.
+
+### 6. RAG AI Chat (`/api/rag`)
+- `POST /api/rag/chat` - Streaming RAG chat endpoint. Sends message history, retrieves relevant Q&A context from the knowledge base using MongoDB text search, and streams GPT-3.5-turbo responses. Falls back to knowledge-base-only answers if `OPENAI_API_KEY` is not set in `.env`.
+
+### 7. Duplicate Query Prevention (`/api/oaq`)
+- `POST /api/oaq/check-duplicate` - Similarity-scored duplicate check. Accepts `{ queryText }`, runs dual-algorithm scoring (word-level 50% + character overlap 50%) against all non-Duplicate issues, returns top 5 matches with matchScore percentage above 35% threshold.
 
 ---
 
