@@ -1,0 +1,717 @@
+================================================================================
+            VICHARANASHALA OAQ & THREADS — TECHNICAL DOCUMENTATION
+================================================================================
+               Architecture Plan | Core Ideas | Features | Pipelines
+================================================================================
+
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+1.  Project Concept & Mission
+2.  System Architecture Overview
+3.  Technology Stack
+4.  Role-Based Access Control
+5.  Complete Feature Catalog (15 Features)
+    5.1  13 Locked Onboarding FAQ OAQ Library
+    5.2  First-Come, First-Served (FCFS) Resolver Board
+    5.3  Automated Content Quality Auditor (Yaksha-mini)
+    5.4  Community Auto-Promotion System
+    5.5  Auto-Escalation Threshold Hook
+    5.6  Collaborative Recommendation Rail (People Also Asked)
+    5.7  RSS Trending Feed
+    5.8  Voice Search & Speech Playback
+    5.9  Gamified Skill Points (SP) & Wallet Subsystem
+    5.10 Collaborative Nested Thread Discussions
+    5.11 Dynamic Section Filters
+    5.12 Admin Moderation & Management Panel
+    5.13 Real-Time Sync Broadcaster
+    5.14 Duplicate Query Prevention
+    5.15 Yaksha Mini AI Chat Widget
+6.  Data Models
+7.  API Architecture & Endpoints
+8.  SP Gamification Rules
+9.  Deployment Pipeline
+10. Security & Authentication
+
+
+================================================================================
+SECTION 1 — PROJECT CONCEPT & MISSION
+================================================================================
+
+Vicharanashala is an onboarding and learning ecosystem for internships. OAQ
+(Once Asked Questions) is its core knowledge-sharing and query-tracking portal.
+
+THE PROBLEM:
+  Interns frequently encounter blocking technical or administrative issues.
+  Without a structured knowledge base, the same questions are asked repeatedly,
+  overwhelming mentors and slowing onboarding.
+
+THE SOLUTION:
+  A gamified, peer-to-peer query resolution system where interns are incentivized
+  to help each other. Every question is asked and answered exactly once, then
+  joins a searchable baseline knowledge base accessible to all future cohorts.
+
+CORE TENETS:
+  - Knowledge Persistence: Answers persist forever as searchable artifacts.
+  - Zero Redundancy: Duplicate queries are detected and blocked before submission.
+  - Gamified Engagement: Skill Points (SP), leaderboards, and badges drive
+    participation.
+  - Quality Assurance: Automated Yaksha-mini audits and community voting ensure
+    answer quality.
+  - Real-Time Collaboration: Socket.io broadcasts keep all sessions synchronized.
+
+
+================================================================================
+SECTION 2 — SYSTEM ARCHITECTURE OVERVIEW
+================================================================================
+
+The platform follows a three-tier MERN architecture with real-time capabilities:
+
+PRESENTATION LAYER (CLIENT):
+  - React 18 SPA with Vite bundler (dev server on port 5173)
+  - React Router v6 for client-side navigation
+  - Socket.io-client for real-time bidirectional events
+  - Web Speech API for voice search and speech playback
+  - Context API for state management (Toast, Theme, Socket, Auth)
+
+APPLICATION LAYER (SERVER):
+  - Node.js + Express REST API (port 5001)
+  - Socket.io server for WebSocket broadcasting
+  - Passport.js for JWT + Google OAuth2 authentication
+  - Mongoose ODM for MongoDB interactions
+  - OpenAI SDK for GPT-3.5-turbo RAG streaming (optional)
+  - Background services: staleWatcher for stale query auto-escalation
+
+DATA LAYER (DATABASE):
+  - MongoDB Atlas cluster (replica set with 3 shards)
+  - Collections: OAQIssue, User, Section, CoOccurrence, SPLedger, Thread
+  - Indexing on queryText, email, issueId, createdAt for performance
+
+HIGH-LEVEL DATA FLOW:
+  Client (React SPA :5173) --HTTP/SSE--> Server (Express :5001)
+    --Mongoose--> MongoDB Atlas
+  Client (Socket.io) --WebSocket--> Server (Socket.io) --Broadcasts--> All clients
+  Server --OpenAI API--> GPT-3.5-turbo (optional RAG streaming)
+
+
+================================================================================
+SECTION 3 — TECHNOLOGY STACK
+================================================================================
+
+  +------------------+---------------------+-------------------------------+
+  | Layer            | Technology          | Version / Notes               |
+  +------------------+---------------------+-------------------------------+
+  | Frontend         | React               | 18.x, SPA with Vite           |
+  | Frontend         | Vite                | 4.x, dev server on :5173      |
+  | Frontend         | React Router DOM    | v6, client-side routing       |
+  | Frontend         | Socket.io-client    | Real-time bidirectional events|
+  | Frontend         | CSS Custom Props    | Light/dark theme tokens       |
+  | Frontend         | Canvas Confetti     | Celebration animations        |
+  | Backend          | Node.js             | 18.x LTS                      |
+  | Backend          | Express             | 4.x, REST API on :5001        |
+  | Backend          | Mongoose            | 8.x ODM                       |
+  | Backend          | Passport.js         | JWT + Google OAuth2 strategy  |
+  | Backend          | Socket.io           | Server-side WebSocket         |
+  | Backend          | jsonwebtoken        | 7-day expiry JWT tokens       |
+  | Backend          | OpenAI SDK          | Optional GPT-3.5-turbo        |
+  | Database         | MongoDB Atlas       | M7 cluster, replica set       |
+  | Auth             | JWT + Google OAuth2 | Bearer token header           |
+  +------------------+---------------------+-------------------------------+
+
+
+================================================================================
+SECTION 4 — ROLE-BASED ACCESS CONTROL
+================================================================================
+
+  +------------------+-----------------+---------------------------------------+
+  | Role             | Access Level    | Key Permissions                       |
+  +------------------+-----------------+---------------------------------------+
+  | Public /         | Read-only       | Search FAQs, read trending, browse    |
+  | Cohort Member    |                 | resolved queries                      |
+  +------------------+-----------------+---------------------------------------+
+  | Intern           | Standard        | Raise queries, answer FCFS, submit    |
+  |                  |                 | replies, vote, raise threads          |
+  +------------------+-----------------+---------------------------------------+
+  | Mentor           | Moderator       | Flag replies, lock/unlock threads,    |
+  |                  |                 | promote answers, sign off resolutions |
+  +------------------+-----------------+---------------------------------------+
+  | Admin            | Manager         | Manage users, dynamic sections,       |
+  |                  |                 | override FCFS, adjust SP balances     |
+  +------------------+-----------------+---------------------------------------+
+  | Superadmin       | Director        | All Admin + register Admins, trigger  |
+  |                  |                 | database seeder tools                 |
+  +------------------+-----------------+---------------------------------------+
+
+Role assignment protection: Users cannot change their own role. Only Superadmins
+can assign Admin or Superadmin roles.
+
+
+================================================================================
+SECTION 5 — COMPLETE FEATURE CATALOG (15 FEATURES)
+================================================================================
+
+
+FEATURE 1 — 13 LOCKED ONBOARDING FAQ OAQ LIBRARY
+----------------------------------------------------------------------
+Core Feature Idea:
+  An instantly accessible, read-only onboarding FAQ center representing 13
+  static categories that prevents common administrative queries from cluttering
+  the open resolver board.
+
+How It Works:
+  Users see 13 onboarding topic accordions (ViBe, NOC, Teams, Onboarding,
+  Reports, Finance, Schedule, Lab, Eval, SP, Yaksha, Tracker, General).
+  Clicking a category slides open the card to reveal the verified answer. Only
+  one accordion is open at a time. Sorting supports ID, Most Upvoted, A->Z,
+  Newest, or Oldest.
+
+Pipeline / Data Flow:
+  Client fetches baseline issues via GET /api/oaq/baseline
+    -> Server queries OAQIssue where isBaseline=true
+    -> Returns sorted accordion data
+    -> Client renders accordion cards with single-open behavior.
+
+
+FEATURE 2 — FIRST-COME, FIRST-SERVED (FCFS) RESOLVER BOARD
+----------------------------------------------------------------------
+Core Feature Idea:
+  A gamified dynamic resolver board where interns compete to claim and resolve
+  open technical roadblocks raised by peers.
+
+How It Works:
+  Lists all unresolved queries in a public table grid. The first intern to
+  respond claims the FCFS resolution via a 30-second TTL lock. Concurrent
+  attempts trigger a 409 collision alert. Submitted answers enter a pending
+  state for community voting. Stale queries (no FCFS claimed within 24h) are
+  highlighted in red/amber. An Activity Summary card shows each user their
+  personal pulse: queries raised, FCFS wins, pending replies, and total
+  upvotes.
+
+Pipeline / Data Flow:
+  User clicks Resolve -> Server sets lockedBy + lockExpiry (30s TTL) on
+  OAQIssue -> Client submits answer -> Server validates via Yaksha-mini audit
+  -> On pass, answer enters pending communityReplies -> Socket.io broadcasts
+  issue:resolved-attempt -> Background staleWatcher runs every 10 minutes,
+  marking queries >24h as stale with priority escalation.
+
+
+FEATURE 3 — AUTOMATED CONTENT QUALITY AUDITOR (YAKSHA-MINI)
+----------------------------------------------------------------------
+Core Feature Idea:
+  A real-time content gate protecting the knowledge base from keyboard mashing,
+  spam, copy-paste blocks, and low-quality one-liners.
+
+How It Works:
+  Runs automatically on every resolution and reply submission before acceptance.
+  Validates: minimum 20 characters, at least 3 words, no repetitive keyboard
+  gibberish (e.g. "asdfasdf"), meaningful word ratio >40%. A real-time preview
+  badge shows the quality score before the user submits. Failed submissions are
+  rejected with a -20 SP penalty.
+
+Pipeline / Data Flow:
+  Client sends answer text -> Server runs validateAnswer() -> Checks: length
+  >= 20, words >= 3, no keyboard_pattern match, meaningful_ratio > 0.40
+  -> If fail: reject with 400, deduct 20 SP, log to SPLedger
+  -> If pass: proceed to communityReplies submission.
+
+
+FEATURE 4 — COMMUNITY AUTO-PROMOTION SYSTEM
+----------------------------------------------------------------------
+Core Feature Idea:
+  Peer-driven validation of knowledge through collective community voting.
+
+How It Works:
+  When an intern submits an FCFS answer, it enters a pending review queue.
+  Other interns upvote or downvote it. Once a reply accumulates 3 net upvotes,
+  it is auto-promoted to "Resolved" and locked as the master answer. The
+  resolver receives +50 SP. Voting is open to all authenticated interns.
+
+Pipeline / Data Flow:
+  Vote event -> Server calls checkAutoPromote() on the issue -> Checks if any
+  communityReply has upvotes - downvotes >= 3 -> If yes: set status=Resolved,
+  answer=promotedReply.text, resolvedBy=promotedReply.repliedBy, award +50 SP
+  to resolver, broadcast issue:resolved via Socket.io.
+
+
+FEATURE 5 — AUTO-ESCALATION THRESHOLD HOOK
+----------------------------------------------------------------------
+Core Feature Idea:
+  Ensures high-severity roadblocks or broadly-interesting queries are
+  automatically highlighted for mentor attention.
+
+How It Works:
+  The system tracks upvotes on unresolved resolver queries. If an open query
+  reaches 5 upvotes within a 2-hour window, its priority is automatically
+  elevated from Normal to HIGH, and a Socket.io alert is broadcast to all
+  connected mentors.
+
+Pipeline / Data Flow:
+  Upvote on open issue -> Server checks upvoteCount >= 5 -> Checks if within
+  2-hour window from createdAt -> If within window: set priority=HIGH, add +5
+  SP to author, emit escalation event via Socket.io to mentor room.
+
+
+FEATURE 6 — COLLABORATIVE RECOMMENDATION RAIL (PEOPLE ALSO ASKED)
+----------------------------------------------------------------------
+Core Feature Idea:
+  Contextually related query suggestions based on collective browsing habits
+  of the cohort.
+
+How It Works:
+  The system tracks co-occurrence pairs whenever a user views an issue detail
+  page. Each view increments a co-occurrence counter for (currentIssue,
+  viewedIssue). The top related questions are displayed alongside the active
+  query as "People Also Asked" recommendations, sorted by co-occurrence count.
+
+Pipeline / Data Flow:
+  User views issue A -> Client sends POST /api/oaq/co-occurrence with
+  {issueA, issueB} -> Server upserts CoOccurrence document, increments
+  viewCount -> On issue detail load, server queries CoOccurrence for top
+  entries related to current issue -> Returns sorted recommendations.
+
+
+FEATURE 7 — RSS TRENDING FEED
+----------------------------------------------------------------------
+Core Feature Idea:
+  A live feed of the cohort's most relevant resolved issues and trending
+  announcements on the homepage.
+
+How It Works:
+  Displays the top 15 resolved issues across all categories, sorted by upvote
+  count with pinned items first, then featured, then others. Auto-refreshes
+  every 5 minutes via setInterval on the client.
+
+Pipeline / Data Flow:
+  Client setInterval(5000ms) -> GET /api/oaq/trending -> Server queries
+  OAQIssue where status=Resolved, sorts by isPinned desc, isFeatured desc,
+  upvoteCount desc, limits 15 -> Returns feed data -> Client renders card
+  list with timeAgo timestamps.
+
+
+FEATURE 8 — VOICE SEARCH & SPEECH PLAYBACK
+----------------------------------------------------------------------
+Core Feature Idea:
+  Enhances accessibility with voice-controlled search and auditory answer
+  playback using the Web Speech API.
+
+How It Works:
+  Users click a microphone icon to speak and search baseline FAQs. Speech
+  recognition converts audio to text and triggers a search. Each FAQ entry has
+  a speaker button that uses SpeechSynthesis to read the answer aloud in a
+  natural en-IN accent voice.
+
+Pipeline / Data Flow:
+  Microphone click -> navigator.mediaDevices.getUserMedia ->
+  SpeechRecognition.start() -> On result, transcript sent as search query
+  -> Client filters baseline FAQs -> Speaker button click ->
+  SpeechSynthesis.speak(utterance) with lang="en-IN", rate=0.9.
+
+
+FEATURE 9 — GAMIFIED SKILL POINTS (SP) & WALLET SUBSYSTEM
+----------------------------------------------------------------------
+Core Feature Idea:
+  Motivate interns with gamified metrics, progress visualizers, and milestones
+  through a comprehensive wallet system.
+
+How It Works:
+  - Overview Tab: Animates the user's total SP on load with a counting-up
+    animation.
+  - Ledger Tab: Full credit/debit transaction history showing every SP change
+    with reason and timestamp.
+  - Leaderboard Tab: Dynamic bar chart comparing all intern balances relative
+    to the highest earner, plus a top-50 ranked list with "Your Rank"
+    highlight.
+  - SP Awards Modal (Admin/Superadmin): When closing a thread, opens a modal
+    to award custom SP to a selected participant from a dropdown of thread
+    contributors.
+  - Confetti Celebrations: canvas-confetti fires at SP milestones (100, 250,
+    500, 1000).
+
+SP Rules:
+  Action                                    SP Change
+  ----------------------------------------+-----------
+  Submit a valid FCFS reply               |   +5 SP
+  Win FCFS resolution (auto-promoted)     |  +50 SP
+  Raise a unique query                    |  +10 SP
+  Auto-escalation trigger                 |   +5 SP
+  Fail Yaksha audit                       |  -20 SP
+  Thread close award (Admin)              |  Custom
+
+Pipeline / Data Flow:
+  Any SP-affecting action -> Server creates SPLedger document with userId,
+  delta, reason, refId, createdAt -> Updates User.sp with $inc -> Socket.io
+  broadcasts wallet:update to affected user -> Client SP counter animates on
+  next load.
+
+
+FEATURE 10 — COLLABORATIVE NESTED THREAD DISCUSSIONS
+----------------------------------------------------------------------
+Core Feature Idea:
+  A nested discussion forum for complex, deep-dive technical conversations
+  extending beyond standard Q&A.
+
+How It Works:
+  - Nested Tree Layout: Replies render in indented conversation trees with
+    vertical connecting lines.
+  - OP Tags: Thread creator labeled with "OP" badge.
+  - Upvote/Downvote: Users can vote on any reply; net vote count displayed.
+  - Reply Inline: Reply directly below any message in the nested tree.
+  - Thread Lock/Unlock (Mentor+): Locks halt all incoming replies.
+  - Mark Resolved (OP or Mentor+): Conceptual satisfaction marker; no SP.
+  - Best Reply Promotion (Mentor+): Accepts reply as best answer, auto-marks
+    thread resolved, highlights as "Accepted."
+  - Dynamic SP Award (Admin/Superadmin): When closing a thread, awards custom
+    SP to a selected participant.
+
+Pipeline / Data Flow:
+  CRUD via /api/threads -> Server manages nested communityReplies with
+  repliedTo references for parent-child tree traversal -> Client renders
+  recursive tree component with connecting lines -> Lock/unlock toggles
+  isLocked boolean -> Best reply sets resolvedAnswerId and isResolved=true.
+
+
+FEATURE 11 — DYNAMIC SECTION FILTERS
+----------------------------------------------------------------------
+Core Feature Idea:
+  Multi-select filter bar that simultaneously filters across baseline,
+  trending, and tracker views.
+
+How It Works:
+  Users select one or more section categories from a filter bar on the
+  homepage. Selected category predicates are fed into API calls, applying
+  filters to OAQ Library, Trending Feed, and Resolver Board views
+  simultaneously.
+
+Pipeline / Data Flow:
+  User selects section tags -> Client updates filteredSections state ->
+  Appends ?sections=01,02,03 to all API GET requests -> Server parses
+  categoryTag $in filter in Mongoose queries -> Returns filtered results.
+
+
+FEATURE 12 — ADMIN MODERATION & MANAGEMENT PANEL
+----------------------------------------------------------------------
+Core Feature Idea:
+  A consolidated administrative dashboard for organizing categories, managing
+  rosters, and reviewing flagged content.
+
+How It Works:
+  - Mod Queues: Distinct queues for flagged replies, downvoted issues, and
+    unanswered queries.
+  - Roster Edits: Modify cohort profiles and SP balances. Role assignments are
+    protected (no self-role-change, only Superadmin assigns Admin/Superadmin).
+  - Dynamic Sections: Full CRUD over category lists.
+  - Seeder Gates: Master seeder triggers to clear and re-initialize baseline
+    collections.
+  - Issue Detail View: Dedicated page for each issue with full history,
+    replies, voting, and moderation actions.
+
+Pipeline / Data Flow:
+  Admin routes under /api/admin with role middleware -> Mod queues query
+  OAQIssue/Thread with flags -> Roster edits update User model -> Section
+  CRUD on Section model -> Seeder triggers /api/admin/seed with superadmin
+  guard.
+
+
+FEATURE 13 — REAL-TIME SYNC BROADCASTER
+----------------------------------------------------------------------
+Core Feature Idea:
+  Instant synchronization across all online sessions without manual refreshes.
+
+How It Works:
+  Socket.io broadcasts on every meaningful action: issue created, resolved,
+  upvoted, replied, escalated, thread locked/unlocked, duplicate marked.
+  Toast notifications appear for all connected users. Socket reconnection UI
+  shows an amber "Reconnecting..." banner when connection drops.
+
+Pipeline / Data Flow:
+  Server action occurs -> io.emit(eventName, payload) -> Client socket
+  listeners handle each event type -> Toast displayed via ToastContext ->
+  Relevant UI component re-renders -> On disconnect, SocketContext sets
+  connected=false, Topbar shows reconnection banner.
+
+
+FEATURE 14 — DUPLICATE QUERY PREVENTION
+----------------------------------------------------------------------
+Core Feature Idea:
+  Prevents redundant queries before they are raised by detecting similarity
+  against existing issues.
+
+How It Works:
+  As the user types in the Raise Query modal, a dual-algorithm similarity
+  scorer runs in the background: word-level matching (50% weight) + character
+  overlap scoring (50% weight) against all non-Duplicate issues including
+  baseline FAQs. Results above a 35% threshold display in a color-coded
+  warning panel: red for >=70%, amber for >=50%, green for <50%. Each result
+  shows match percentage, section tag, FAQ badge, and status. Uses 400ms
+  debounce.
+
+Pipeline / Data Flow:
+  User types queryText -> 400ms debounce -> POST /api/oaq/check-duplicate
+  -> Server iterates all non-duplicate issues + baselines -> Computes
+  word-level Jaccard similarity (50%) + character bigram overlap (50%)
+  -> Composite score >= 35% returned as warnings -> Client renders color-coded
+  warning panel -> User can cancel submission and view existing answer.
+
+
+FEATURE 15 — YAKSHA MINI AI CHAT WIDGET
+----------------------------------------------------------------------
+Core Feature Idea:
+  An always-accessible AI assistant backed by the FAQ knowledge base with
+  real-time streaming responses.
+
+How It Works:
+  A floating chatbot button in the bottom-right corner opens a chat panel.
+  Messages are sent to POST /api/rag/chat. The server builds context by
+  retrieving relevant resolved baseline Q&As via MongoDB $regex text search.
+  If OPENAI_API_KEY is configured, responses stream from GPT-3.5-turbo via
+  Server-Sent Events (SSE); otherwise a fallback returns keyword-matched KB
+  answers as plain text. Widget visible only to authenticated users. Chat
+  history resets each session. Enter sends, Shift+Enter adds newline. Blinking
+  cursor shown during streaming.
+
+Pipeline / Data Flow:
+  User sends message -> POST /api/rag/chat -> Server searches KB via $regex
+  on queryText/answer -> If OPENAI_API_KEY set: build context prompt + query,
+  fetch streaming from OpenAI API, pipe SSE chunks via res.write() -> Client
+  reads SSE stream, appends tokens to message bubble with blinking cursor
+  -> If no API key: return top KB match as plain text response.
+
+
+================================================================================
+SECTION 6 — DATA MODELS
+================================================================================
+
+OAQIssue  (Core query/issue entity)
+  Field             Type                    Description
+  ---------------- ----------------------- ------------------------------------
+  issueId           Number                  Sequential integer identifier
+  queryText         String                  The question being asked
+  answer            String                  Resolved answer text
+  categoryTag       String ("01"-"13")      Section category reference
+  status            String                  Enum: Open / Resolved / Duplicate
+  priority          String                  Enum: NORMAL / HIGH
+  isBaseline        Boolean                 Locks entry from tracker (static FAQ)
+  isPinned          Boolean                 Pinned to top of feeds
+  isFeatured        Boolean                 Featured in trending
+  upvoteCount       Number                  Cached upvote tally
+  communityReplies  Array                   Embedded reply documents
+  raisedBy          ObjectId (ref: User)    Query author
+  resolvedBy        ObjectId (ref: User)    Resolver who won FCFS
+  duplicateOf       ObjectId (ref: OAQIssue)Parent issue if marked duplicate
+  lockedBy          ObjectId (ref: User)    Current FCFS lock holder
+  lockExpiry        Date                    30-second TTL for FCFS lock
+
+User  (Cohort member profile)
+  Field             Type                    Description
+  ---------------- ----------------------- ------------------------------------
+  name              String                  Display name
+  email             String (unique)         Login identifier
+  password          String (hashed)         bcrypt hash
+  role              String                  Enum: intern/mentor/admin/superadmin
+  sp                Number                  Running SP total
+  langPref          String                  Language preference
+  joinDate          Date                    Account creation date
+
+Section  (Category metadata)
+  Field             Type                    Description
+  ---------------- ----------------------- ------------------------------------
+  sectionId         String ("01"-"13")      Unique section code
+  label             String                  Display name (e.g. ViBe, NOC)
+  scope             String                  Scope description
+  description       String                  Detailed description
+  color             String (hex)            Theme color for UI badges
+  locked            Boolean                 Visibility control
+
+CoOccurrence  (Collaborative filtering pairs)
+  Field             Type                    Description
+  ---------------- ----------------------- ------------------------------------
+  issueIdA          ObjectId (ref: OAQIssue)First issue in pair
+  issueIdB          ObjectId (ref: OAQIssue)Second issue in pair
+  viewCount         Number                  Number of co-views (incremented)
+
+SPLedger  (Immutable SP transaction log)
+  Field             Type                    Description
+  ---------------- ----------------------- ------------------------------------
+  userId            ObjectId (ref: User)    Affected user
+  delta             Number (+/-)            SP change amount
+  reason            String                  Human-readable reason
+  refId             ObjectId                Related issue or thread reference
+  createdAt         Date (auto)             Transaction timestamp
+
+Thread  (Forum discussion thread)
+  Field             Type                    Description
+  ---------------- ----------------------- ------------------------------------
+  title             String                  Thread title
+  body              String                  Thread body content
+  tags              Array of String         Category tags
+  postedBy          ObjectId (ref: User)    Thread author
+  isLocked          Boolean                 Prevents new replies
+  isResolved        Boolean                 Satisfaction marker
+  resolvedAnswerId  ObjectId                Best reply reference
+  communityReplies  Array                   Nested reply tree
+  upvotes           Number                  Net upvote count
+  downvotes         Number                  Net downvote count
+
+
+================================================================================
+SECTION 7 — API ARCHITECTURE & ENDPOINTS
+================================================================================
+
+All endpoints are prefixed with /api. Authentication is via JWT Bearer token
+in the Authorization header with 7-day expiry.
+
+AUTHENTICATION (/api/auth)
+  Method  Endpoint                       Description
+  ------  ------------------------------ ----------------------------------------
+  POST    /api/auth/register             Register new user with confirm password
+  POST    /api/auth/login                Login, returns JWT token
+  GET     /api/auth/google               Initiate Google OAuth flow
+  GET     /api/auth/google/callback      Google OAuth callback
+  POST    /api/auth/forgot-password      Send password reset email
+  POST    /api/auth/reset-password       Process reset token and update password
+  GET     /api/auth/me                   Get current user profile
+
+OAQ ISSUES (/api/oaq)
+  Method  Endpoint                                    Description
+  ------  ------------------------------------------- --------------------------
+  GET     /api/oaq                                     List all issues (filtered)
+  GET     /api/oaq/baseline                            Get baseline FAQ issues
+  GET     /api/oaq/trending                            Get top 15 resolved
+  GET     /api/oaq/open                                Get open FCFS issues
+  GET     /api/oaq/:id                                 Get single issue detail
+  POST    /api/oaq                                     Create new query
+  POST    /api/oaq/:id/resolve                         Submit FCFS resolution
+  POST    /api/oaq/:id/reply                           Submit community reply
+  POST    /api/oaq/:id/upvote                          Upvote issue
+  POST    /api/oaq/:id/downvote                        Downvote issue
+  POST    /api/oaq/:id/reply/:rid/upvote               Upvote community reply
+  POST    /api/oaq/:id/reply/:rid/downvote             Downvote community reply
+  POST    /api/oaq/:id/duplicate                       Mark issue as duplicate
+  POST    /api/oaq/check-duplicate                     Dual-algorithm duplicate
+                                                        check
+  POST    /api/oaq/co-occurrence                       Log co-occurrence pair
+
+ADMIN (/api/admin)
+  Method  Endpoint                       Description
+  ------  ------------------------------ ----------------------------------------
+  GET     /api/admin/users                List all users (roster)
+  PUT     /api/admin/users/:id            Update user role/SP/profile
+  GET     /api/admin/stats                Dashboard stats (?range=7d|30d)
+  GET     /api/admin/sections             List all sections
+  POST    /api/admin/sections             Create new section
+  PUT     /api/admin/sections/:id         Update section
+  DELETE  /api/admin/sections/:id         Delete section
+  POST    /api/admin/seed                 Trigger database seeder (Superadmin)
+
+THREADS (/api/threads)
+  Method  Endpoint                                        Description
+  ------  ----------------------------------------------- ---------------------
+  GET     /api/threads                                     List all threads
+  POST    /api/threads                                     Create new thread
+  GET     /api/threads/:id                                 Get thread detail
+  PUT     /api/threads/:id                                 Update thread
+  POST    /api/threads/:id/reply                           Reply to thread
+  POST    /api/threads/:id/reply/:rid/upvote               Upvote reply
+  POST    /api/threads/:id/reply/:rid/downvote             Downvote reply
+  POST    /api/threads/:id/reply/:rid/promote              Promote best answer
+
+RAG CHAT (/api/rag)
+  Method  Endpoint                       Description
+  ------  ------------------------------ ----------------------------------------
+  POST    /api/rag/chat                  Send to Yaksha Mini AI; SSE stream or
+                                          plain text fallback
+
+USERS (/api/users)
+  Method  Endpoint                       Description
+  ------  ------------------------------ ----------------------------------------
+  GET     /api/users/profile/:id         Get user profile with SP/badges
+  GET     /api/users/leaderboard         Get SP leaderboard with ranks
+  GET     /api/users/ledger              Get current user SP transaction history
+
+
+================================================================================
+SECTION 8 — SP GAMIFICATION RULES
+================================================================================
+
+  Action                         Awarded To       Amount   Condition
+  ------------------------------ --------------- -------- ------------------------
+  Submit valid FCFS reply        Responder        +5       On Yaksha-audited reply
+  Win FCFS resolution            Resolver         +50      Reply gets 3 net
+                                                            upvotes (auto-promo)
+  Raise unique query             Author           +10      Must pass duplicate
+                                                            check
+  Auto-escalation trigger        Author           +5       5 upvotes within 2hrs
+  Fail Yaksha audit              Responder        -20      Reply rejected by gate
+  Thread close SP award          Participant     Custom    Admin/Superadmin modal
+
+All SP transactions are immutably logged to the SPLedger collection for full
+auditability.
+
+
+================================================================================
+SECTION 9 — DEPLOYMENT PIPELINE
+================================================================================
+
+DEVELOPMENT ENVIRONMENT:
+  - Server: Node.js on port 5001 with nodemon for hot-reload
+  - Client: Vite dev server on port 5173 with HMR
+  - Database: MongoDB Atlas cluster (shared M7 replica set)
+  - Environment: .env files for both server/ and client/
+
+GIT WORKFLOW:
+  1. Feature branches from main (git checkout -b <name>)
+  2. Pull requests with descriptive titles
+  3. Merge to main after review + conflict resolution
+  4. git push origin main to deploy
+
+BUILD & DEPLOY:
+  1. Client: vite build produces static dist/ folder
+  2. Server: Node.js Express serves API + optionally serves dist/ as static
+  3. Environment variables configured per target
+  4. MongoDB connection string points to Atlas replica set with SSL
+
+ENVIRONMENT VARIABLES:
+  Variable               Purpose                      Required
+  ---------------------  -------------------------   --------
+  PORT                   Server listen port           Yes (default 5000)
+  MONGO_URI              MongoDB Atlas connection     Yes
+  JWT_SECRET             Token signing secret         Yes
+  CLIENT_ORIGIN          CORS allowed origin          Yes
+  OPENAI_API_KEY         GPT-3.5-turbo streaming     Optional
+  STALE_THRESHOLD_DAYS   Stale query timeout          Optional (default 1)
+  VITE_API_URL           Backend API base URL         Optional (default /api)
+  VITE_GOOGLE_CLIENT_ID  Google OAuth client ID       Optional
+
+
+================================================================================
+SECTION 10 — SECURITY & AUTHENTICATION
+================================================================================
+
+AUTHENTICATION:
+  - JWT-based: Token signed with JWT_SECRET, 7-day expiry
+  - Token sent via Authorization: Bearer <token> header
+  - Google OAuth 2.0 via passport-google-oauth20 strategy
+  - Client distinguishes session expiry vs login failure via different toasts
+  - Registration includes password confirm field, eye-toggle visibility, and
+    validation on both client and server
+
+AUTHORIZATION:
+  - Role-based middleware protecting admin/mentor/superadmin routes
+  - Role self-change protection: users cannot change their own role
+  - Admin/Superadmin roles assignable only by Superadmin
+
+DATA SECURITY:
+  - Passwords hashed with bcrypt before storage
+  - MongoDB Atlas with SSL-enabled connection
+  - Input validation on all mutation endpoints
+  - Duplicate query prevention blocks redundant data entry
+  - Yaksha-mini content gate prevents spam/malicious submissions
+
+SESSION SECURITY:
+  - 401 responses trigger session expiry handling: localStorage cleared, toast
+    shown, redirect to login
+  - Socket.io reconnection with automatic state resync
+  - CORS configured with CLIENT_ORIGIN whitelist
+
+================================================================================
+                        END OF DOCUMENTATION
+================================================================================
