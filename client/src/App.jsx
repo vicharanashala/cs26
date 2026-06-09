@@ -9,6 +9,7 @@ import ThreadsPage from './pages/ThreadsPage';
 import AdminPage from './pages/AdminPage';
 import AdminIssueDetail from './pages/AdminIssueDetail';
 import UserProfileModal from './components/UserProfileModal';
+import GoogleCallback from './pages/GoogleCallback';
 import RAGChatWidget from './components/RAGChatWidget';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
@@ -95,6 +96,9 @@ function Shell() {
   }, [location.pathname]);
 
   if (loading) return null;
+  if (!user && location.pathname === '/auth/google/callback') {
+    return <GoogleCallback onAuth={(nextUser, token) => login(nextUser, token)} />;
+  }
   if (!user) return <LoginForm onAuth={(nextUser, token) => login(nextUser, token)} />;
 
   return (

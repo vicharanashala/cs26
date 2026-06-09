@@ -50,8 +50,23 @@ export async function login(email, password) {
   return data;
 }
 
-export async function register(name, email, password, role = 'intern') {
-  const data = await api.post('/auth/register', { name, email, password, role });
+export async function register(name, email, password, role = 'intern', confirmPassword = '') {
+  const data = await api.post('/auth/register', { name, email, password, confirmPassword, role });
+  localStorage.setItem('oaq_token', data.token);
+  localStorage.setItem('oaq_user', JSON.stringify(data.user));
+  return data;
+}
+
+export async function forgotPassword(email) {
+  return api.post('/auth/forgot-password', { email });
+}
+
+export async function resetPassword(token, password, confirmPassword) {
+  return api.post('/auth/reset-password', { token, password, confirmPassword });
+}
+
+export async function googleLogin(credential) {
+  const data = await api.post('/auth/google', credential);
   localStorage.setItem('oaq_token', data.token);
   localStorage.setItem('oaq_user', JSON.stringify(data.user));
   return data;
