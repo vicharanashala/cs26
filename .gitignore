@@ -41,7 +41,4 @@ Thumbs.db
 *.sw?
 
 # Local context docs
-CONTEXT.md
-IMPLEMENTED.md
-SUGGESTION.md
 client/openrouter key.txt
